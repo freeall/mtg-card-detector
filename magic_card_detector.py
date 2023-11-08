@@ -2,30 +2,26 @@
 Module for detecting and recognizing Magic: the Gathering cards from an image.
 author: Timo Ikonen
 email: timo.ikonen (at) iki.fi
+
+Modified by Tobias Baunbæk Christensen <freeall@gmail.com>
 """
 
 import glob
 import os
-import cProfile
-import pstats
-import io
 import pickle
 import argparse
 from copy import deepcopy
 from itertools import product
 from dataclasses import dataclass
-
 import numpy as np
-import matplotlib.pyplot as plt
-
 from shapely.geometry import LineString
 from shapely.geometry.polygon import Polygon
 from shapely.affinity import scale
 from scipy.ndimage import rotate
 from PIL import Image as PILImage
-
 import imagehash
 import cv2
+import json
 
 
 def order_polygon_points(x, y):
@@ -384,6 +380,9 @@ class CardCandidate:
     recognition_score: float = 0.
     is_fragment: bool = False
     name: str = 'unknown'
+    set: str = 'setsetsets'
+    id: str = 'ididid'
+    number: str = 'numnumnum'
 
     # def __init__(self, im_seg, bquad, fraction):
     #    self.image = im_seg
@@ -408,8 +407,11 @@ class ReferenceImage:
     Container for a card image and the associated recoginition data.
     """
 
-    def __init__(self, name, original_image, clahe, phash=None):
+    def __init__(self, name, original_image, clahe, phash=None, set=None, number=None, id=None):
         self.name = name
+        self.set = set
+        self.number = number
+        self.id = id
         self.original = original_image
         self.clahe = clahe
         self.adjusted = None
@@ -450,7 +452,6 @@ class TestImage:
         self.clahe = clahe
         self.adjusted = None
         self.phash = None
-        self.visual = False
         self.histogram_adjust()
         # self.calculate_phash()
 
@@ -495,61 +496,6 @@ class TestImage:
                         else:
                             candidate.is_fragment = True
 
-    def plot_image_with_recognized(self, output_path, visual=False):
-        """
-        Plots the recognized cards into the full image.
-        """
-        # Plotting
-        plt.figure()
-        plt.imshow(cv2.cvtColor(self.original, cv2.COLOR_BGR2RGB))
-        plt.axis('off')
-        for candidate in self.candidate_list:
-            if not candidate.is_fragment:
-                full_image = self.adjusted
-                bquad_corners = np.empty((4, 2))
-                bquad_corners[:, 0] = np.asarray(
-                    candidate.bounding_quad.exterior.coords)[:-1, 0]
-                bquad_corners[:, 1] = np.asarray(
-                    candidate.bounding_quad.exterior.coords)[:-1, 1]
-
-                plt.plot(np.append(bquad_corners[:, 0],
-                                   bquad_corners[0, 0]),
-                         np.append(bquad_corners[:, 1],
-                                   bquad_corners[0, 1]), 'g-')
-                bounding_poly = Polygon([[x, y] for (x, y) in
-                                         zip(bquad_corners[:, 0],
-                                             bquad_corners[:, 1])])
-                fntsze = int(6 * bounding_poly.length / full_image.shape[1])
-                bbox_color = 'white' if candidate.is_recognized else 'red'
-                plt.text(np.average(bquad_corners[:, 0]),
-                         np.average(bquad_corners[:, 1]),
-                         candidate.name.capitalize(),
-                         horizontalalignment='center',
-                         fontsize=fntsze,
-                         bbox=dict(facecolor=bbox_color,
-                                   alpha=0.7))
-
-        # plt.savefig(output_path + '/MTG_card_recognition_results_' +
-        #             str(self.name.split('.jpg')[0]) +
-        #             '.jpg', dpi=600, bbox='tight')
-        plt.savefig(output_path + '/MTG_card_recognition_results_' +
-                    str(self.name.split('.jpg')[0]) +
-                    '.jpg', dpi=600)
-        if visual:
-            plt.show()
-
-    def print_recognized(self):
-        """
-        Prints out the recognized cards from the image.
-        """
-        recognized_list = self.return_recognized()
-        print('Recognized cards (' +
-              str(len(recognized_list)) +
-              ' cards):')
-        for card in recognized_list:
-            print(card.name +
-                  '  - with score ' +
-                  str(card.recognition_score))
 
     def return_recognized(self):
         """
@@ -591,13 +537,9 @@ class MagicCardDetector:
     MTG card detector class.
     """
 
-    def __init__(self, output_path):
+    def __init__(self):
         self.reference_images = []
         self.test_images = []
-        self.output_path = output_path
-
-        self.verbose = False
-        self.visual = False
 
         self.hash_separation_thr = 4.
         self.thr_lvl = 70
@@ -605,55 +547,34 @@ class MagicCardDetector:
         self.clahe = cv2.createCLAHE(clipLimit=2.0,
                                      tileGridSize=(8, 8))
 
-    def export_reference_data(self, path):
-        """
-        Exports the phash and card name of the reference data list.
-        """
-        hlist = []
-        for image in self.reference_images:
-            hlist.append(ReferenceImage(image.name,
-                                        None,
-                                        None,
-                                        image.phash))
-
-        with open(path, 'wb') as fhandle:
-            pickle.dump(hlist, fhandle)
 
     def read_prehashed_reference_data(self, path):
         """
         Reads pre-calculated hashes of the reference images.
         """
-        print('Reading prehashed data from ' + str(path))
-        print('...', end=' ')
         with open(path, 'rb') as filename:
             hashed_list = pickle.load(filename)
         for ref_im in hashed_list:
             self.reference_images.append(
-                ReferenceImage(ref_im.name, None, self.clahe, ref_im.phash))
-        print('Done.')
+                ReferenceImage(ref_im.name, None, self.clahe, ref_im.phash, set=ref_im.set, number=ref_im.number, id=ref_im.id))
 
     def read_and_adjust_reference_images(self, path):
         """
         Reads and histogram-adjusts the reference image set.
         Pre-calculates the hashes of the images.
         """
-        print('Reading images from ' + str(path))
-        print('...', end=' ')
         filenames = glob.glob(path + '*.jpg')
         for filename in filenames:
             img = cv2.imread(filename)
             img_name = filename.split(path)[1]
             self.reference_images.append(
                 ReferenceImage(img_name, img, self.clahe))
-        print('Done.')
 
     def read_and_adjust_test_images(self, path):
         """
         Reads and histogram-adjusts the test image set.
         """
         maxsize = 1000
-        print('Reading images from ' + str(path))
-        print('...', end=' ')
         filenames = glob.glob(path.rstrip('/') + '/*.jpg')
         for filename in filenames:
             img = cv2.imread(filename)
@@ -667,7 +588,6 @@ class MagicCardDetector:
             img_name = os.path.basename(filename)
             self.test_images.append(
                 TestImage(img_name, img, self.clahe))
-        print('Done.')
 
     def contour_image_gray(self, full_image, thresholding='adaptive'):
         """
@@ -688,9 +608,6 @@ class MagicCardDetector:
                                       70,
                                       255,
                                       cv2.THRESH_BINARY)
-        if self.visual and self.verbose:
-            plt.imshow(thresh)
-            plt.show()
 
         # _, contours, _ = cv2.findContours(
         contours, _ = cv2.findContours(
@@ -718,13 +635,6 @@ class MagicCardDetector:
         contours_r, _ = cv2.findContours(
             np.uint8(thr_r), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         contours = contours_b + contours_g + contours_r
-        if self.visual and self.verbose:
-            plt.imshow(thr_r)
-            plt.show()
-            plt.imshow(thr_g)
-            plt.show()
-            plt.imshow(thr_b)
-            plt.show()
         return contours
 
     def contour_image(self, full_image, mode='gray'):
@@ -772,7 +682,7 @@ class MagicCardDetector:
             except NotImplementedError as nie:
                 # this can occur in Shapely for some funny contour shapes
                 # resolve by discarding the candidate
-                print(nie)
+                # print(nie)
                 (continue_segmentation,
                  is_card_candidate,
                  bounding_poly,
@@ -791,10 +701,6 @@ class MagicCardDetector:
                     CardCandidate(warped,
                                   bounding_poly,
                                   bounding_poly.area / image_area))
-                if self.verbose:
-                    print('Segmented ' +
-                          str(len(test_image.candidate_list)) +
-                          ' candidates.')
 
     def phash_diff(self, phash_im):
         """
@@ -812,7 +718,10 @@ class MagicCardDetector:
         the (pre-hashed) reference set.
         """
 
-        card_name = 'unknown'
+        name = 'unknown'
+        set = 'unknown'
+        number = 'unknown',
+        id = 'unknown'
         is_recognized = False
         recognition_score = 0.
         rotations = np.array([0., 90., 180., 270.])
@@ -835,16 +744,17 @@ class MagicCardDetector:
             d_0_ave = np.average(d_0_)
             d_0_std = np.std(d_0_)
             d_0_dist[j] = (d_0_ave - np.amin(d_0[:, j])) / d_0_std
-            if self.verbose:
-                print('Phash statistical distance: ' + str(d_0_dist[j]))
             if (d_0_dist[j] > self.hash_separation_thr and
                     np.argmax(d_0_dist) == j):
-                card_name = self.reference_images[np.argmin(d_0[:, j])]\
-                    .name.split('.jpg')[0]
+                ref_img = self.reference_images[np.argmin(d_0[:, j])]
+                name = ref_img.name
+                set = ref_img.set
+                number = ref_img.number
+                id = ref_img.id
                 is_recognized = True
                 recognition_score = d_0_dist[j] / self.hash_separation_thr
                 break
-        return (is_recognized, recognition_score, card_name)
+        return (is_recognized, recognition_score, name, set, number, id)
 
     def recognize_segment(self, image_segment):
         """
@@ -863,13 +773,6 @@ class MagicCardDetector:
             image_index = [image_index]
         for i in image_index:
             test_image = self.test_images[i]
-            # print('Accessing image ' + test_image.name)
-
-            if self.visual:
-                print('Original image')
-                plt.imshow(cv2.cvtColor(test_image.original,
-                                        cv2.COLOR_BGR2RGB))
-                plt.show()
 
             alg_list = ['adaptive', 'rgb']
 
@@ -880,16 +783,15 @@ class MagicCardDetector:
                         len(test_image.return_recognized()) > 5):
                     break
 
-            # print('Plotting and saving the results...')
             for candidate in test_image.candidate_list:
                 if not candidate.is_fragment:
-                    print(candidate.name)
-            # print(test_image.candidate_list)
-
-            # test_image.plot_image_with_recognized(self.output_path, self.visual)
-            # print('Done.')
-            # test_image.print_recognized()
-        # print('Recognition done.')
+                    res = json.dumps({
+                        'name': candidate.name,
+                        'set': candidate.set,
+                        'id': candidate.id,
+                        'number': candidate.number
+                    })
+                    print(res)
 
     def recognize_cards_in_image(self, test_image, contouring_mode):
         """
@@ -897,21 +799,12 @@ class MagicCardDetector:
         The image has been read in and adjusted previously,
         and is contained in the internal data list of the class.
         """
-        # print('Segmentating card candidates out of the image...')
-        # print('Using ' + str(contouring_mode) + ' algorithm.')
 
         test_image.candidate_list.clear()
         self.segment_image(test_image, contouring_mode=contouring_mode)
 
-        # print('Done. Found ' +
-        #       str(len(test_image.candidate_list)) + ' candidates.')
-        # print('Recognizing candidates.')
-
         for i_cand, candidate in enumerate(test_image.candidate_list):
             im_seg = candidate.image
-            # if self.verbose:
-            #     print(str(i_cand + 1) + " / " +
-            #           str(len(test_image.candidate_list)))
 
             # Easy fragment / duplicate detection
             for other_candidate in test_image.candidate_list:
@@ -922,19 +815,12 @@ class MagicCardDetector:
             if not candidate.is_fragment:
                 (candidate.is_recognized,
                  candidate.recognition_score,
-                 candidate.name) = self.recognize_segment(im_seg)
+                 candidate.name,
+                 candidate.set,
+                 candidate.number,
+                 candidate.id) = self.recognize_segment(im_seg)
 
-        # print('Done. Found ' +
-        #       str(len(test_image.return_recognized())) +
-        #       ' cards.')
-        # if self.verbose:
-        #     for card in test_image.return_recognized():
-        #         print(card.name + '; S = ' + str(card.recognition_score))
-        # print('Removing duplicates...')
-        # Final fragment detection
         test_image.mark_fragments()
-        # print('Done.')
-
 
 def main():
     """
@@ -949,28 +835,13 @@ def main():
 
     parser.add_argument('input_path',
                         help='path containing the images to be analyzed')
-    parser.add_argument('output_path',
-                        help='output path for the results')
     parser.add_argument('--phash', default='alpha_reference_phash.dat',
                         help='pre-calculated phash reference file')
-    parser.add_argument('--visual', default=False, action='store_true',
-                        help='run with visualization')
-    parser.add_argument('--verbose', default=False, action='store_true',
-                        help='run in verbose mode')
 
     args = parser.parse_args()
 
-    # Create the output path
-    output_path = args.output_path.rstrip('/')
-    if not os.path.exists(output_path):
-        os.mkdir(output_path)
-
     # Instantiate the detector
-    card_detector = MagicCardDetector(output_path)
-
-    do_profile = False
-    card_detector.visual = args.visual
-    card_detector.verbose = args.verbose
+    card_detector = MagicCardDetector()
 
     # Read the reference and test data sets
     # card_detector.read_and_adjust_reference_images(
@@ -978,26 +849,8 @@ def main():
     card_detector.read_prehashed_reference_data(args.phash)
     card_detector.read_and_adjust_test_images(args.input_path)
 
-    if do_profile:
-        # Start up the profiler.
-        profiler = cProfile.Profile()
-        profiler.enable()
-
     # Run the card detection and recognition.
-
     card_detector.run_recognition()
-
-    if do_profile:
-        # Stop profiling and organize and print profiling results.
-        profiler.disable()
-        profiler.dump_stats('magic_card_detector.prof')
-        profiler_stream = io.StringIO()
-        sortby = pstats.SortKey.CUMULATIVE
-        profiler_stats = pstats.Stats(
-            profiler, stream=profiler_stream).sort_stats(sortby)
-        profiler_stats.print_stats(20)
-        print(profiler_stream.getvalue())
-
 
 if __name__ == "__main__":
     main()

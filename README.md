@@ -1,4 +1,4 @@
-# magic_card_detector
+# py-mtg-card-identifer
 
 This has been forked from https://github.com/tmikonen/magic_card_detector.
 
@@ -7,4 +7,8 @@ I've also added requirements.txt so it's easier for others to run.
 
 ## Test
 
-This is a simple test to show the program works
+```
+$ python test/test.py
+```
+
+Some test cases to test both `generate-hashes.py` and `magic_card_detector.py`
