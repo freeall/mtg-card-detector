@@ -36,7 +36,7 @@ Generally they should be named `COLLECTOR-NUMBER_SCRYFALL-ID_NAME.jpg`. The unde
 This example can run out of the box, with the alpha cards provided in this repo.
 
 ```
-$ python phash-generator.py --set lea --folder test/lea --output lea_phashes.dat
+$ ./phash-generator.py --set lea --folder test/lea --output lea_phashes.dat
 ```
 
 ### Detecting cards in an image
@@ -48,7 +48,7 @@ Note that you first need to have a `.dat` file with phashes of pictures/scans of
 This example can run out of the box, if you have generated the `.dat` file first running the above.
 
 ```
-$ python detector.py --phash lea_phashes.dat test/test-pictures
+$ ./detector.py --phash lea_phashes.dat test/test-pictures
 {"name": "Counterspell", "set": "lea", "id": "0df55e3f-14de-46ef-b6b1-616618724d9e", "number": "54"}
 {"name": "Instill Energy", "set": "lea", "id": "5bd38716-874c-4e3c-a315-837839a6258c", "number": "202"}
 {"name": "Island", "set": "lea", "id": "90a57c0e-fa61-45ef-955d-d296403967d5", "number": "288"}
