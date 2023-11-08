@@ -3,16 +3,13 @@ Module for detecting and recognizing Magic: the Gathering cards from an image.
 author: Timo Ikonen
 email: timo.ikonen (at) iki.fi
 
-Modified by Tobias Baunbæk Christensen <freeall@gmail.com>
+Modified by Tobias Baunbæk Christensen <freeall(at)gmail.com>
 """
 
 import glob
 import os
 import pickle
-import argparse
-from copy import deepcopy
 from itertools import product
-from dataclasses import dataclass
 import numpy as np
 from shapely.geometry import LineString
 from shapely.geometry.polygon import Polygon
@@ -22,6 +19,9 @@ from PIL import Image as PILImage
 import imagehash
 import cv2
 import json
+from reference_image import ReferenceImage
+from card_candidate import CardCandidate
+from test_image import TestImage
 
 
 def order_polygon_points(x, y):
@@ -363,175 +363,6 @@ def characterize_card_contour(card_contour,
             bounding_poly,
             crop_factor)
 
-#
-# CLASSES
-#
-
-
-@dataclass
-class CardCandidate:
-    """
-    Class representing a segment of the image that may be a recognizable card.
-    """
-    image: np.ndarray
-    bounding_quad: Polygon
-    image_area_fraction: float
-    is_recognized: bool = False
-    recognition_score: float = 0.
-    is_fragment: bool = False
-    name: str = 'unknown'
-    set: str = 'setsetsets'
-    id: str = 'ididid'
-    number: str = 'numnumnum'
-
-    # def __init__(self, im_seg, bquad, fraction):
-    #    self.image = im_seg
-    #    self.bounding_quad = bquad
-    #    self.is_recognized = False
-    #    self.recognition_score = 0.
-    #    self.is_fragment = False
-    #    self.image_area_fraction = fraction
-    #    self.name = 'unknown'
-
-    def contains(self, other):
-        """
-        Returns whether the bounding polygon of the card candidate
-        contains the bounding polygon of the other candidate.
-        """
-        return bool(other.bounding_quad.within(self.bounding_quad) and
-                    other.name == self.name)
-
-
-class ReferenceImage:
-    """
-    Container for a card image and the associated recoginition data.
-    """
-
-    def __init__(self, name, original_image, clahe, phash=None, set=None, number=None, id=None):
-        self.name = name
-        self.set = set
-        self.number = number
-        self.id = id
-        self.original = original_image
-        self.clahe = clahe
-        self.adjusted = None
-        self.phash = phash
-
-        if self.original is not None:
-            self.histogram_adjust()
-            self.calculate_phash()
-
-    def calculate_phash(self):
-        """
-        Calculates the perceptive hash for the image
-        """
-        self.phash = imagehash.phash(
-            PILImage.fromarray(np.uint8(255 * cv2.cvtColor(
-                self.adjusted, cv2.COLOR_BGR2RGB))),
-            hash_size=32)
-
-    def histogram_adjust(self):
-        """
-        Adjusts the image by contrast limited histogram adjustmend (clahe)
-        """
-        lab = cv2.cvtColor(self.original, cv2.COLOR_BGR2LAB)
-        lightness, redness, yellowness = cv2.split(lab)
-        corrected_lightness = self.clahe.apply(lightness)
-        limg = cv2.merge((corrected_lightness, redness, yellowness))
-        self.adjusted = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
-
-
-class TestImage:
-    """
-    Container for a card image and the associated recoginition data.
-    """
-
-    def __init__(self, name, original_image, clahe):
-        self.name = name
-        self.original = original_image
-        self.clahe = clahe
-        self.adjusted = None
-        self.phash = None
-        self.histogram_adjust()
-        # self.calculate_phash()
-
-        self.candidate_list = []
-
-    def histogram_adjust(self):
-        """
-        Adjusts the image by contrast limited histogram adjustmend (clahe)
-        """
-        lab = cv2.cvtColor(self.original, cv2.COLOR_BGR2LAB)
-        lightness, redness, yellowness = cv2.split(lab)
-        corrected_lightness = self.clahe.apply(lightness)
-        limg = cv2.merge((corrected_lightness, redness, yellowness))
-        self.adjusted = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
-
-    def mark_fragments(self):
-        """
-        Finds doubly (or multiply) segmented cards and marks all but one
-        as a fragment (that is, an unnecessary duplicate)
-        """
-        for (candidate, other_candidate) in product(self.candidate_list,
-                                                    repeat=2):
-            if candidate.is_fragment or other_candidate.is_fragment:
-                continue
-            if ((candidate.is_recognized or other_candidate.is_recognized) and
-                    candidate is not other_candidate):
-                i_area = candidate.bounding_quad.intersection(
-                    other_candidate.bounding_quad).area
-                min_area = min(candidate.bounding_quad.area,
-                               other_candidate.bounding_quad.area)
-                if i_area > 0.5 * min_area:
-                    if (candidate.is_recognized and
-                            other_candidate.is_recognized):
-                        if (candidate.recognition_score <
-                                other_candidate.recognition_score):
-                            candidate.is_fragment = True
-                        else:
-                            other_candidate.is_fragment = True
-                    else:
-                        if candidate.is_recognized:
-                            other_candidate.is_fragment = True
-                        else:
-                            candidate.is_fragment = True
-
-
-    def return_recognized(self):
-        """
-        Returns a list of recognized and non-fragment card candidates.
-        """
-        recognized_list = []
-        for candidate in self.candidate_list:
-            if candidate.is_recognized and not candidate.is_fragment:
-                recognized_list.append(candidate)
-        return recognized_list
-
-    def discard_unrecognized_candidates(self):
-        """
-        Trims the candidate list to keep only the recognized ones
-        """
-        recognized_list = deepcopy(self.return_recognized())
-        self.candidate_list.clear()
-        self.candidate_list = recognized_list
-
-    def may_contain_more_cards(self):
-        """
-        Simple area-based test to see if using a different segmentation
-        algorithm may lead to finding more cards in the image.
-        """
-        recognized_list = self.return_recognized()
-        if not recognized_list:
-            return True
-        tot_area = 0.
-        min_area = 1.
-        for card in recognized_list:
-            tot_area += card.image_area_fraction
-            if card.image_area_fraction < min_area:
-                min_area = card.image_area_fraction
-        return bool(tot_area + 1.5 * min_area < 1.)
-
-
 class MagicCardDetector:
     """
     MTG card detector class.
@@ -821,36 +652,3 @@ class MagicCardDetector:
                  candidate.id) = self.recognize_segment(im_seg)
 
         test_image.mark_fragments()
-
-def main():
-    """
-    Python MTG Card Detector.
-    Can be used also purely through the defined classes.
-    """
-
-    # Add command line parser
-    parser = argparse.ArgumentParser(
-        description='Recognize Magic: the Gathering cards from an image. ' +
-                     'Author: Timo Ikonen, timo.ikonen(at)iki.fi')
-
-    parser.add_argument('input_path',
-                        help='path containing the images to be analyzed')
-    parser.add_argument('--phash', default='alpha_reference_phash.dat',
-                        help='pre-calculated phash reference file')
-
-    args = parser.parse_args()
-
-    # Instantiate the detector
-    card_detector = MagicCardDetector()
-
-    # Read the reference and test data sets
-    # card_detector.read_and_adjust_reference_images(
-    #     '../../MTG/Card_Images/LEA/')
-    card_detector.read_prehashed_reference_data(args.phash)
-    card_detector.read_and_adjust_test_images(args.input_path)
-
-    # Run the card detection and recognition.
-    card_detector.run_recognition()
-
-if __name__ == "__main__":
-    main()

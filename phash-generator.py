@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import pickle
 import magic_card_detector as mcg
 import argparse
@@ -5,7 +7,7 @@ import argparse
 def main():
   parser = argparse.ArgumentParser(
     description=
-      'Generate hashes for mtg-card-detector. \n' +
+      'Generate phashes for mtg-card-detector. \n' +
       '\n'+
       'IMPORTANT: Expect files to be named COLLECTOR-NUMBER_SOME-ID_CARD-NAME.jpg\n' +
       '           e.g. 232_b0faa7f2-b547-42c4-a810-839da50dadfe_Black Lotus.jpg\n'+
@@ -26,21 +28,21 @@ def main():
     '--folder',
     type=str,
     required=True,
-    help='Folder containing the images to be analyzed and added to the hash file'
+    help='Folder containing the images to be analyzed and added to the phash file'
   )
   parser.add_argument(
     '-o',
     '--output',
     type=str,
     required=True,
-    help='The file to store the hashes in, e.g. all_hashes.dat'
+    help='The file to store the phashes in, e.g. all_phashes.dat'
   )
   parser.add_argument(
     '-a',
     '--append',
     required=False,
     action='store_true',
-    help='Append to hash file, e.g. --append all_hashes.dat'
+    help='Append to phash file, e.g. --append all_phashes.dat'
   )
 
   args = parser.parse_args()

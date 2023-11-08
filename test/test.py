@@ -2,28 +2,28 @@ import subprocess
 import os
 import json
 
-# First test the hash generator
-print('ℹ️  Generating hashes from pictures in the "./lea" folder')
+# First test the phash generator
+print('ℹ️  Generating phashes from pictures in the "./limited_edition_alpha" folder')
 result = subprocess.run(
   [
-    'python', '../generate-hash.py',
+    'python', '../phash-generator.py',
     '--set', 'lea',
-    '--folder', 'lea/',
-    '--output', 'lea_hashes.dat'
+    '--folder', 'limited_edition_alpha',
+    '--output', 'lea_phashes.dat'
   ],
   capture_output = True,
   text = True
 )
 assert result.stdout == ''
 assert result.stderr == ''
-print('✅ Hashes were generated and stored in lea_hashes.dat')
+print('✅ Phashes were generated and stored in lea_phashes.dat')
 
-# Then use the fil{"name": "Counterspell", "set": "lea", "id": "0df55e3f-14de-46ef-b6b1-616618724d9e", "number": "54"}e from the hash generator to test the mtg-card-identifier
-print('ℹ️  Detecting images from "./test-pictures" and check with the previously generated hashes, "lea_hashes.dat"')
+# Then use the file from the phash generator to test the mtg-card-identifier
+print('ℹ️  Detecting images from "./test-pictures" and check with the previously generated phashes, "lea_phashes.dat"')
 result = subprocess.run(
   [
-    'python', '../magic_card_detector.py',
-    '--phash', 'lea_hashes.dat',
+    'python', '../detector.py',
+    '--phash', 'lea_phashes.dat',
     'test-pictures'
   ],
   capture_output = True,
@@ -41,6 +41,6 @@ print('✅ All images were detected as suspected')
 
 # Clean up
 print('ℹ️  Cleaning up')
-os.remove('lea_hashes.dat')
+os.remove('lea_phashes.dat')
 
 print('✅ All tests were ok!')
