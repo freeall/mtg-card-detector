@@ -22,8 +22,8 @@ def main():
     help='path containing the images to be analyzed'
   )
   parser.add_argument(
-    '-p',
     '--phash',
+    '-p',
     required=True,
     help='pre-calculated phash reference file'
   )

@@ -3,6 +3,7 @@
 import pickle
 import magic_card_detector as mcg
 import argparse
+import os
 
 def main():
   parser = argparse.ArgumentParser(
@@ -15,38 +16,65 @@ def main():
       '\n'+
       'If you want to train with different versions of the same card, e.g. some versions are a bit crooked, you can easily do that just by adding the different versions.'
   )
-
   parser.add_argument(
-    '-s',
-    '--set',
-    type=str,
-    required=True,
-    help='The set code of this set, e.g. "lea" for "Limited Edition Alpha", or "ktk" for "Khans of Tarkir"'
-  )
-  parser.add_argument(
-    '-f',
     '--folder',
+    '-f',
     type=str,
     required=True,
-    help='Folder containing the images to be analyzed and added to the phash file'
+    help='Folder containing the images to be analyzed and added to the phash file.\nIf --sets-in-subfolders is provided then it is assumes that all sets are in sub-folders of this, e.g. /sets/lea, /sets/ktk, etc'
   )
   parser.add_argument(
-    '-o',
     '--output',
+    '-o',
     type=str,
     required=True,
     help='The file to store the phashes in, e.g. all_phashes.dat'
   )
   parser.add_argument(
-    '-a',
+    '--set',
+    '-s',
+    type=str,
+    help='The set code of this set, e.g. "lea" for "Limited Edition Alpha", or "ktk" for "Khans of Tarkir"'
+  )
+  parser.add_argument(
+    '--sets-in-subfolders',
+    required=False,
+    action='store_true',
+    help='If all your sets are in subfolder, e.g. /sets/lea, /sets/ktk, etc, then use this. Then you do not need to use --set.'
+  )
+  parser.add_argument(
     '--append',
+    '-a',
     required=False,
     action='store_true',
     help='Append to phash file, e.g. --append all_phashes.dat'
   )
 
   args = parser.parse_args()
-  add(args.folder, args.set, args.output, args.append)
+
+  if (args.sets_in_subfolders):
+    add_all_subfolders(args.folder, args.output, args.append)
+  else:
+    add(args.folder, args.set, args.output, args.append)
+
+
+def add_all_subfolders(folder, output_file, append):
+  if (not append):
+    try:
+      os.remove(output_file)
+    except:
+      pass
+  if (not os.path.exists(output_file)):
+    f = open(output_file, 'wb')
+    pickle.dump([], f)
+    f.close()
+
+  sets = os.listdir(folder)
+  for i in range(len(sets)):
+    set = sets[i]
+    print('[' + str(i + 1) + '/' + str(len(sets)) + '] Generating phash from images from the "' + set + '" set')
+    add(folder + '/' + set, set, output_file, True)
+
 
 def add(folder, set, output_file, append):
   if (folder[-1] == '/'):
