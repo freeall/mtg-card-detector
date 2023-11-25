@@ -9,28 +9,28 @@ result = subprocess.run(
     'python', '../phash-generator.py',
     '--set', 'lea',
     '--folder', 'limited_edition_alpha',
-    '--output', 'lea_phashes.dat'
+    '--output', 'test.py-generated.dat'
   ],
   capture_output = True,
   text = True
 )
 assert result.stdout == ''
 assert result.stderr == ''
-print('✅ Phashes were generated and stored in lea_phashes.dat')
+print('✅ Phashes were generated and stored in test.py-generated.dat')
 
 # Then use the file from the phash generator to test the mtg-card-identifier
-print('ℹ️  Detecting images from "./test-pictures" and check with the previously generated phashes, "lea_phashes.dat"')
+print('ℹ️  Detecting images from "./test-pictures" and check with the previously generated phashes, "test.py-generated.dat"')
 result = subprocess.run(
   [
     'python', '../detector.py',
-    '--phash', 'lea_phashes.dat',
-    'test-pictures'
+    '--phash', 'test.py-generated.dat',
+    '--input_path', 'test-pictures'
   ],
   capture_output = True,
   text = True
 )
 cards_found = result.stdout.strip().split('\n')
-assert 52 == len(cards_found)
+assert 55 == len(cards_found)
 
 counterspell = json.loads(cards_found[0])
 assert 'Counterspell' == counterspell['name']
@@ -41,6 +41,6 @@ print('✅ All images were detected as suspected')
 
 # Clean up
 print('ℹ️  Cleaning up')
-os.remove('lea_phashes.dat')
+os.remove('test.py-generated.dat')
 
 print('✅ All tests were ok!')

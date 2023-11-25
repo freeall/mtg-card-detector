@@ -2,6 +2,7 @@
 
 import argparse
 import magic_card_detector as mcg
+import sys
 
 def main():
   """
@@ -18,14 +19,21 @@ def main():
   )
 
   parser.add_argument(
-    'input_path',
-    help='path containing the images to be analyzed'
-  )
-  parser.add_argument(
     '--phash',
     '-p',
     required=True,
     help='pre-calculated phash reference file'
+  )
+  parser.add_argument(
+    '--continuous',
+    '-c',
+    action='store_true',
+    help='do not exit, but continuously read filenames from stdin'
+  )
+  parser.add_argument(
+    '--input_path',
+    '-i',
+    help='folder containing images to be analyzed'
   )
 
   args = parser.parse_args()
@@ -35,10 +43,16 @@ def main():
 
   # Read the reference and test data sets
   card_detector.read_prehashed_reference_data(args.phash)
-  card_detector.read_and_adjust_test_images(args.input_path)
+  if (args.input_path):
+    card_detector.read_and_adjust_test_images(args.input_path)
+    card_detector.run_recognition()
+  if (args.continuous):
 
-  # Run the card detection and recognition.
-  card_detector.run_recognition()
+    for line in sys.stdin:
+      filename = line.strip()
+      card_detector.read_and_adjust_single_image(filename)
+      card_detector.run_recognition()
+      sys.stdout.flush()
 
 if __name__ == '__main__':
   main()

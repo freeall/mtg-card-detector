@@ -401,6 +401,20 @@ class MagicCardDetector:
             self.reference_images.append(
                 ReferenceImage(img_name, img, self.clahe))
 
+    def read_and_adjust_single_image(self, filename):
+        maxsize = 1000
+        img = cv2.imread(filename)
+        if min(img.shape[0], img.shape[1]) > maxsize:
+            scalef = maxsize / min(img.shape[0], img.shape[1])
+            img = cv2.resize(img,
+                                (int(img.shape[1] * scalef),
+                                int(img.shape[0] * scalef)),
+                                interpolation=cv2.INTER_AREA)
+
+        img_name = os.path.basename(filename)
+        self.test_images.append(
+            TestImage(img_name, img, self.clahe))
+
     def read_and_adjust_test_images(self, path):
         """
         Reads and histogram-adjusts the test image set.
@@ -607,6 +621,8 @@ class MagicCardDetector:
 
             alg_list = ['adaptive', 'rgb']
 
+            found_card = False
+
             for alg in alg_list:
                 self.recognize_cards_in_image(test_image, alg)
                 test_image.discard_unrecognized_candidates()
@@ -619,10 +635,16 @@ class MagicCardDetector:
                     res = json.dumps({
                         'name': candidate.name,
                         'set': candidate.set,
+                        'number': candidate.number,
                         'id': candidate.id,
-                        'number': candidate.number
+                        'recognition_score': candidate.recognition_score
                     })
+                    found_card = True
                     print(res)
+
+            if not found_card:
+                print('{"error":"COULD_NOT_DETECT_ANY_CARDS"}')
+        self.test_images.clear()
 
     def recognize_cards_in_image(self, test_image, contouring_mode):
         """

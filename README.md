@@ -1,12 +1,19 @@
 # mtg-card-detector
 
-Detects Magic: The Gathering cards in images and returns JSON as
+Detects Magic: The Gathering cards in images and outputs JSON as
 ``` json
 {
   "name": "Counterspell",
   "set": "lea", // The unique set code. E.g. lea = Limited Edition Alpha
   "number": "54", // The collectors number in the set
   "id": "0df55e3f-14de-46ef-b6b1-616618724d9e" // The id from the Scryfall API
+}
+```
+
+or if it cannot detect any card it will output
+``` json
+{
+  "error": "COULD_NOT_DETECT_ANY_CARDS"
 }
 ```
 
@@ -28,12 +35,29 @@ pip install -r requirements.txt
 
 **Note**: you first need to generate phashes of pictures/scans of the cards you want to detect. Read the next usage sections first.
 
-`usage: detector.py [-h] [--phash PHASH] input_path`
+`usage: detector.py [--help] --phash PHASH [--continuous] [--input_path PATH]`
+
+You will either need to use `--continuous` or `--input_path`
+
+- `--continuous`: The program will keep running and you will need to pass paths to file throught stdin
+- `--input_path PATH`: The program will run only on those files in that folder
+
+**Example 1:**
+
+In a long-running setup you will most likely not want to keep starting the detector, but keep it running and send paths to it over stdin when there is a card you need to detect.
+
+```
+$ echo "test/limited_edition_alpha/3_6f9ea46a-411f-40ce-a873-a905180093f4_Balance.jpg" | ./detector.py --phash test/lea_phashes.dat --continuous
+{"name": "Balance", "set": "lea", "number": "3", "id": "6f9ea46a-411f-40ce-a873-a905180093f4", "recognition_score": 1.066549935262097}
+```
+
+**Example 2:**
 
 This example can run out of the box, if you have generated the `.dat` file first running the above.
 
 ```
-$ ./detector.py --phash lea_phashes.dat test/test-pictures
+$ ./detector.py --phash test/lea_phashes.dat --input_path test/test-pictures
+ready
 {"name": "Counterspell", "set": "lea", "id": "0df55e3f-14de-46ef-b6b1-616618724d9e", "number": "54"}
 {"name": "Instill Energy", "set": "lea", "id": "5bd38716-874c-4e3c-a315-837839a6258c", "number": "202"}
 {"name": "Island", "set": "lea", "id": "90a57c0e-fa61-45ef-955d-d296403967d5", "number": "288"}
@@ -90,8 +114,9 @@ I've tested locally where I created a database of all images of all ~80k Magic c
 
 ### Detecting cards in an image
 
-With an `all_phashes.dat` of 70mb it still only took ~1 second to find a card in an image. So it's pretty fast.
+With an `all_phashes.dat` of 70mb it still only took ~1 second to find a card in an image when using `--input_path`. So it's pretty fast.
 
+For a long-running or production setup, you will probably want to use `--continuous`.
 
 ## Test
 
